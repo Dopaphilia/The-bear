@@ -29,6 +29,19 @@ public class PlayerController : MonoBehaviour
     [Header("Pushing")]
     [SerializeField] private float pushForce = 2.0f;
     private CharacterController controller;
+    
+    [Header("Item")]
+    [SerializeField] private GameObject lighterObject;
+    private bool isHolding = false;
+
+    // 팔 각도조정 (임시 / 애니메이션 만들어진다면 제거)
+    [Header("LeftArm")]
+    public Transform leftArmBone;
+    public Transform leftFrontArmBone;
+    public Transform leftHandBone;
+    public Vector3 armBoneRot;
+    public Vector3 frontArmBoneRot;
+    public Vector3 leftHandBoneRot;
 
     private Animator anim;
     public LayerMask interactionLayer;
@@ -49,6 +62,19 @@ public class PlayerController : MonoBehaviour
         controller.Move(moveVelocity * Time.deltaTime);
         moveCamera();
         interaction();
+    }
+
+    void LateUpdate()
+    {
+        if (lighterObject != null && lighterObject.activeSelf)
+        {
+            if (leftArmBone != null)
+            {
+                leftArmBone.localRotation *= Quaternion.Euler(armBoneRot);
+                leftFrontArmBone.localRotation *= Quaternion.Euler(frontArmBoneRot);
+                leftHandBone.localRotation *= Quaternion.Euler(leftHandBoneRot);
+            }
+        }
     }
     // 충돌시 밀어지는 기능 (알아서 실행)
     void OnControllerColliderHit(ControllerColliderHit hit)
@@ -95,6 +121,7 @@ public class PlayerController : MonoBehaviour
         {
             anim.SetBool("isWalking", isWalking);
             anim.SetBool("isRunning", isRunning);
+            anim.SetBool("isHolding", isHolding);
         }
     }
 
@@ -195,9 +222,16 @@ public class PlayerController : MonoBehaviour
                     {
                         if (itemScript != null && hitDistance <= ItemGetDistance)
                         {
-                            string item = itemScript.itemName;
-                            Debug.Log(item + " 획득");
-                            Destroy(hitInfo.collider.gameObject); // 아이템 오브젝트 제거
+                            if (itemScript.itemName == "Lighter")
+                            {
+                                Debug.Log(itemScript.itemName + " 획득");
+                                Destroy(hitInfo.collider.gameObject);
+                                if (lighterObject != null)
+                                {
+                                    lighterObject.SetActive(true);
+                                    isHolding = true;
+                                }
+                            }
                         }
                     }
                 }
