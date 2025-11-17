@@ -13,6 +13,9 @@ public class PlayerController : MonoBehaviour
     [Header("Movement")]
     [SerializeField] float playerSpeed = 5f;
     [SerializeField] float runSpeed = 8f;
+    private bool isRunning = false;
+    private Vector3 moveVelocity; // X, Y, Z 모든 움직임을 담을 변수
+    private float currentCameraRotationX = 0f; // 카메라 회전 변수 (상하)
     
     [Header("Jumping")]
     [SerializeField] private float jumpForce = 6.5f; // 초기 속도
@@ -26,14 +29,14 @@ public class PlayerController : MonoBehaviour
     [Header("Pushing")]
     [SerializeField] private float pushForce = 2.0f;
     private CharacterController controller;
-    private Vector3 moveVelocity; // X, Y, Z 모든 움직임을 담을 변수
-    private float currentCameraRotationX = 0f; // 카메라 회전 변수 (상하)
-    private bool isRunning = false;
+
+    private Animator anim;
+    public LayerMask interactionLayer;
 
     void Start()
     {
         controller = GetComponent<CharacterController>(); 
-        
+        anim = GetComponentInChildren<Animator>();
         Cursor.lockState = CursorLockMode.Locked; // 커서 잠금 
         Cursor.visible = false; // 커서 안보이게
     }
@@ -76,6 +79,7 @@ public class PlayerController : MonoBehaviour
     {
         float moveDirX = Input.GetAxisRaw("Horizontal");
         float moveDirZ = Input.GetAxisRaw("Vertical");
+        bool isWalking = (moveDirX != 0 || moveDirZ != 0);
         isRunning = Input.GetKey(KeyCode.LeftShift);
 
         // 현재 바라보는 방향을 기준으로 계산
@@ -87,6 +91,11 @@ public class PlayerController : MonoBehaviour
 
         moveVelocity.x = moveInput.x * currentSpeed;
         moveVelocity.z = moveInput.z * currentSpeed;
+        if (anim != null)
+        {
+            anim.SetBool("isWalking", isWalking);
+            anim.SetBool("isRunning", isRunning);
+        }
     }
 
     // 점프
@@ -132,7 +141,7 @@ public class PlayerController : MonoBehaviour
         // raycast시각 확인용 (미충돌 빨강, 충돌 녹색)   
         Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.red);
 
-        if (Physics.Raycast(rayOrigin, rayDirection, out hitInfo, interactionDistance))
+        if (Physics.Raycast(rayOrigin, rayDirection, out hitInfo, interactionDistance, interactionLayer))
         {
             if (hitInfo.collider.CompareTag("Door"))
             {
@@ -144,16 +153,29 @@ public class PlayerController : MonoBehaviour
                     if (Input.GetKeyDown(KeyCode.E))
                     {
                         Door doorScript = hitInfo.collider.GetComponentInParent<Door>();
-                        if (doorScript != null)
+                        if (doorScript.doorType == Door.DoorType.Rotating)
                         {
-                            if (!doorScript.isDoorMoving())
+                            if (doorScript != null)
                             {
-                                float moveAmount = safeInteractionDistance - hitDistance;
-                                Vector3 totalMove = -playerCamera.transform.forward * moveAmount; //카메라의 정면방향의 반대방향으로 물러남
-                                CharacterController controller = GetComponent<CharacterController>();
-                                if (controller != null)
+                                if (!doorScript.isDoorMoving())
                                 {
-                                    StartCoroutine(smoothMovePlayer(controller, totalMove, 0.25f, doorScript));
+                                    float moveAmount = safeInteractionDistance - hitDistance;
+                                    Vector3 totalMove = -playerCamera.transform.forward * moveAmount; //카메라의 정면방향의 반대방향으로 물러남
+                                    CharacterController controller = GetComponent<CharacterController>();
+                                    if (controller != null)
+                                    {
+                                        StartCoroutine(smoothMovePlayer(controller, totalMove, 0.25f, doorScript));
+                                    }
+                                }
+                            }
+                        }
+                        else if (doorScript.doorType == Door.DoorType.Sliding)
+                        {
+                            if (doorScript != null)
+                            {
+                                if (!doorScript.isDoorMoving())
+                                {
+                                    doorScript.doorOpen();
                                 }
                             }
                         }
