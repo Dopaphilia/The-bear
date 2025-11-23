@@ -33,6 +33,7 @@ public class PlayerController : MonoBehaviour
     [Header("Item")]
     [SerializeField] private GameObject lighterObject;
     private bool isHolding = false;
+    private bool hasLighter = false;
 
     // 팔 각도조정 (임시 / 애니메이션 만들어진다면 제거)
     [Header("LeftArm")]
@@ -42,6 +43,10 @@ public class PlayerController : MonoBehaviour
     public Vector3 armBoneRot;
     public Vector3 frontArmBoneRot;
     public Vector3 leftHandBoneRot;
+    
+    [Header("Arm Tracking Settings")]
+    [Range(0f, 2f)] public float armFollowSensitivity = 0.5f;
+    public Vector3 armTrackingAxis = new Vector3(1,0,0);
 
     private Animator anim;
     public LayerMask interactionLayer;
@@ -70,7 +75,8 @@ public class PlayerController : MonoBehaviour
         {
             if (leftArmBone != null)
             {
-                leftArmBone.localRotation *= Quaternion.Euler(armBoneRot);
+                float cameraAngle = currentCameraRotationX * armFollowSensitivity;
+                leftArmBone.localRotation *= Quaternion.Euler(armBoneRot + (cameraAngle*armTrackingAxis));
                 leftFrontArmBone.localRotation *= Quaternion.Euler(frontArmBoneRot);
                 leftHandBone.localRotation *= Quaternion.Euler(leftHandBoneRot);
             }
@@ -186,12 +192,18 @@ public class PlayerController : MonoBehaviour
                             {
                                 if (!doorScript.isDoorMoving())
                                 {
-                                    float moveAmount = safeInteractionDistance - hitDistance;
-                                    Vector3 totalMove = -playerCamera.transform.forward * moveAmount; //카메라의 정면방향의 반대방향으로 물러남
-                                    CharacterController controller = GetComponent<CharacterController>();
-                                    if (controller != null)
+                                    if (doorScript.IsPlayerInPath(transform.position)) {
+                                        float moveAmount = safeInteractionDistance - hitDistance;
+                                        Vector3 totalMove = -playerCamera.transform.forward * moveAmount; //카메라의 정면방향의 반대방향으로 물러남
+                                        CharacterController controller = GetComponent<CharacterController>();
+                                        if (controller != null)
+                                        {
+                                            StartCoroutine(smoothMovePlayer(controller, totalMove, 0.25f, doorScript));
+                                        }
+                                    }
+                                    else
                                     {
-                                        StartCoroutine(smoothMovePlayer(controller, totalMove, 0.25f, doorScript));
+                                        doorScript.doorOpen();
                                     }
                                 }
                             }
@@ -217,12 +229,12 @@ public class PlayerController : MonoBehaviour
                 {
                     Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
                     Item itemScript = hitInfo.collider.GetComponent<Item>();
-                    Debug.Log(itemScript.itemName + "과(와) 상호작용 가능");
-                    if (Input.GetKeyDown(KeyCode.E))
+                    if (itemScript.itemName == "Lighter")
                     {
-                        if (itemScript != null && hitDistance <= ItemGetDistance)
+                        Debug.Log(itemScript.itemName + " 획득 가능");
+                        if (Input.GetKeyDown(KeyCode.E))
                         {
-                            if (itemScript.itemName == "Lighter")
+                            if (itemScript != null && hitDistance <= ItemGetDistance)
                             {
                                 Debug.Log(itemScript.itemName + " 획득");
                                 Destroy(hitInfo.collider.gameObject);
@@ -230,10 +242,42 @@ public class PlayerController : MonoBehaviour
                                 {
                                     lighterObject.SetActive(true);
                                     isHolding = true;
+                                    hasLighter = true;
                                 }
                             }
                         }
                     }
+                    if (itemScript.itemName == "Candle")
+                    {
+                        CandleController candle = hitInfo.collider.GetComponentInParent<CandleController>();
+                        if (candle != null && hitDistance <= ItemGetDistance) {
+                            if (hasLighter && !candle.isFire)
+                            {
+                                Debug.Log("E : 향 피우기");
+                                if (Input.GetKeyDown(KeyCode.E))
+                                {
+                                    if (itemScript != null && hitDistance <= ItemGetDistance)
+                                    {
+                                        candle.IgniteCandle();
+                                        Debug.Log("향을 피웠습니다.");
+                                    }
+                                }
+                            }
+                            else if (candle.isFire)
+                            {
+                                Debug.Log("E : 향 끄기");
+                                if (Input.GetKeyDown(KeyCode.E))
+                                {
+                                    if (itemScript != null && hitDistance <= ItemGetDistance)
+                                    {
+                                        candle.ExtinguishCandle();
+                                        Debug.Log("향을 껐습니다.");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                 }
             }
         }

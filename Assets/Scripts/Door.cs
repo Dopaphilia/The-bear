@@ -32,6 +32,16 @@ public class Door : MonoBehaviour
         targetPosition = initialPosition;
     }
     
+    public bool IsPlayerInPath (Vector3 playerPosition)
+    {
+        if (doorType == DoorType.Sliding) return false;
+
+        Vector3 localPos = transform.InverseTransformPoint(playerPosition);
+        if (localPos.z < 0) return true;
+        if (isOpen && openAngle < 0 && localPos.x < 0) return true;
+        if (isOpen && openAngle > 0 && localPos.x > 0) return true;
+        return false;
+    }
     // 문 열기/닫기 함수
     public bool doorOpen()
     {
