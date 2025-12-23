@@ -35,6 +35,10 @@ public class PlayerController : MonoBehaviour
     private bool isHolding = false;
     private bool hasLighter = false;
 
+    [Header("Peephole")]
+    private bool isPeeping = false;
+    private DoorPeephole currentPeephole;
+
     // 팔 각도조정 (임시 / 애니메이션 만들어진다면 제거)
     [Header("LeftArm")]
     public Transform leftArmBone;
@@ -61,6 +65,12 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (isPeeping)
+        {
+            CheckExitPeeping();
+            return;
+        }
+
         Move();
         Jump();
         // controller.Move()가 모든 것을 처리, Time.deltaTime 필수
@@ -82,6 +92,35 @@ public class PlayerController : MonoBehaviour
             }
         }
     }
+
+    void CheckExitPeeping()
+    {
+        // E키나 ESC키를 누르면 렌즈 보기 종료
+        if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape))
+        {
+            StopPeeping();
+        }
+    }
+    void StartPeeping(DoorPeephole peephole)
+    {
+        isPeeping = true;
+        currentPeephole = peephole;
+        
+        // 렌즈 카메라 켜기
+        currentPeephole.EnableView();
+    }
+
+    // [추가] 렌즈 보기 종료 (원래대로 복구)
+    void StopPeeping()
+    {
+        if (currentPeephole != null)
+        {
+            currentPeephole.DisableView();
+            currentPeephole = null;
+        }
+        isPeeping = false;
+    }
+
     // 충돌시 밀어지는 기능 (알아서 실행)
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
@@ -278,6 +317,25 @@ public class PlayerController : MonoBehaviour
                         }
                     }
 
+                }
+            }
+            else if (hitInfo.collider.CompareTag("Peephole"))
+            {
+                hitDistance = hitInfo.distance;
+                // 렌즈는 문보다 가까이서 봐야 하므로 거리를 짧게 잡습니다.
+                if (hitDistance <= 1.0f) 
+                {
+                    Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
+                    // UI 표시 (예: "E : 살펴보기") 등을 띄우는 코드 추가 가능
+                    Debug.Log("E : 살펴보기");
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        DoorPeephole peepholeScript = hitInfo.collider.GetComponent<DoorPeephole>();
+                        if (peepholeScript != null)
+                        {
+                            StartPeeping(peepholeScript);
+                        }
+                    }
                 }
             }
         }
