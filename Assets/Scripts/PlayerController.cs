@@ -273,15 +273,26 @@ public class PlayerController : MonoBehaviour
                         Debug.Log(itemScript.itemName + " 획득 가능");
                         if (Input.GetKeyDown(KeyCode.E))
                         {
-                            if (itemScript != null && hitDistance <= ItemGetDistance)
+                            if (itemScript != null && hitDistance <= ItemGetDistance && hasLighter == false)
                             {
                                 Debug.Log(itemScript.itemName + " 획득");
-                                Destroy(hitInfo.collider.gameObject);
+                                hitInfo.collider.gameObject.SetActive(false);
                                 if (lighterObject != null)
                                 {
                                     lighterObject.SetActive(true);
                                     isHolding = true;
                                     hasLighter = true;
+                                }
+                            }
+                            else if (itemScript != null && hitDistance <= ItemGetDistance && hasLighter)
+                            {
+                                Debug.Log(itemScript.itemName + " 해제");
+                                hitInfo.collider.gameObject.SetActive(true);
+                                if (lighterObject != null)
+                                {
+                                    lighterObject.SetActive(false);
+                                    isHolding = false;
+                                    hasLighter = false;
                                 }
                             }
                         }
