@@ -5,10 +5,7 @@ using UnityEngine;
 public class Item : MonoBehaviour
 {
     public string itemName;
-    public void getItem()
-    {
-        
-    }
+    public GameObject linkedSpot;
 }
 
 

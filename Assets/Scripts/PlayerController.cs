@@ -277,22 +277,15 @@ public class PlayerController : MonoBehaviour
                             {
                                 Debug.Log(itemScript.itemName + " 획득");
                                 hitInfo.collider.gameObject.SetActive(false);
+                                if (itemScript.linkedSpot != null)
+                                {
+                                    itemScript.linkedSpot.SetActive(true);
+                                }
                                 if (lighterObject != null)
                                 {
                                     lighterObject.SetActive(true);
                                     isHolding = true;
                                     hasLighter = true;
-                                }
-                            }
-                            else if (itemScript != null && hitDistance <= ItemGetDistance && hasLighter)
-                            {
-                                Debug.Log(itemScript.itemName + " 해제");
-                                hitInfo.collider.gameObject.SetActive(true);
-                                if (lighterObject != null)
-                                {
-                                    lighterObject.SetActive(false);
-                                    isHolding = false;
-                                    hasLighter = false;
                                 }
                             }
                         }
@@ -330,6 +323,25 @@ public class PlayerController : MonoBehaviour
 
                 }
             }
+            else if (hitInfo.collider.CompareTag("ItemSpot"))
+            {
+                if (hasLighter) {
+                    Debug.Log("E : 라이터 놓기");
+
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        ItemSpot spotScript = hitInfo.collider.GetComponent<ItemSpot>();
+                        if (spotScript != null)
+                        {
+                            lighterObject.SetActive(false);
+                            isHolding = false;
+                            hasLighter = false;
+                            spotScript.originalItem.SetActive(true);
+                            hitInfo.collider.gameObject.SetActive(false);
+                        }
+                    }
+                }
+            }
             else if (hitInfo.collider.CompareTag("Peephole"))
             {
                 hitDistance = hitInfo.distance;
@@ -345,6 +357,50 @@ public class PlayerController : MonoBehaviour
                         if (peepholeScript != null)
                         {
                             StartPeeping(peepholeScript);
+                        }
+                    }
+                }
+            }
+            else if (hitInfo.collider.CompareTag("Fridge"))
+            {
+                hitDistance = hitInfo.distance;
+                // 냉장고 상호작용 가능 거리 설정 (기존 ItemGetDistance 등 활용 가능)
+                if (hitDistance <= 2.0f) 
+                {
+                    Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
+                    Debug.Log("E : 냉장고 열기/닫기");
+
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        // 부모 객체에 있는 FridgeManager를 찾음
+                        FridgeManager fridge = hitInfo.collider.GetComponentInParent<FridgeManager>();
+                        
+                        if (fridge != null)
+                        {
+                            // 현재 Ray가 맞은 문(hitInfo.collider.gameObject)을 넘겨줌
+                            fridge.Interact(hitInfo.collider.gameObject);
+                        }
+                    }
+                }
+            }
+            else if (hitInfo.collider.CompareTag("Sink"))
+            {
+                hitDistance = hitInfo.distance;
+                if (hitDistance <= 2.0f) 
+                {
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        Debug.Log("3. E키 입력 확인!"); // 이게 뜨면 키 입력도 OK
+
+                        SinkController sink = hitInfo.collider.GetComponentInParent<SinkController>();
+                        if (sink != null)
+                        {
+                            Debug.Log("4. SinkController 찾음 -> 물 틀기 시도");
+                            sink.ToggleWater();
+                        }
+                        else
+                        {
+                            Debug.LogError("오류: SinkController 스크립트를 찾을 수 없습니다! 세면대에 스크립트를 붙였나요?");
                         }
                     }
                 }
