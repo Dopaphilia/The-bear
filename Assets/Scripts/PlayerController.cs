@@ -55,6 +55,9 @@ public class PlayerController : MonoBehaviour
     private Animator anim;
     public LayerMask interactionLayer;
 
+    [Header("Routine State")]
+    private bool isHandlingRoutine = false;
+
     void Start()
     {
         controller = GetComponent<CharacterController>(); 
@@ -65,7 +68,7 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        if (isPeeping)
+        if (isPeeping || isHandlingRoutine)
         {
             CheckExitPeeping();
             return;
@@ -194,6 +197,84 @@ public class PlayerController : MonoBehaviour
             // 매 프레임 중력만큼 Y 속도를 감소
             moveVelocity.y -= gravity * Time.deltaTime;
         }
+    }
+    public void StartSinkRoutine(SinkInteractable sink)
+    {
+        StartCoroutine(SinkRoutineCoroutine(sink));
+    }
+
+    IEnumerator SinkRoutineCoroutine(SinkInteractable sink)
+    {
+        isHandlingRoutine = true;
+
+        // [추가됨 1] 라이터를 들고 있었다면 잠시 숨기기 (주머니에 넣는 연출)
+        bool wasHoldingLighter = isHolding; // 루틴 시작 전 상태 기억
+        
+        if (wasHoldingLighter && lighterObject != null)
+        {
+            lighterObject.SetActive(false); // 모델 숨기기
+            isHolding = false; // 상태 변수 끄기
+            if (anim != null) anim.SetBool("isHolding", false); // 팔 드는 애니메이션 해제
+            
+            // LateUpdate에 있는 팔 IK 로직도 lighterObject.activeSelf 체크 덕분에 자동으로 멈춤
+        }
+
+        // 걷기 애니메이션 초기화
+        if (anim != null)
+        {
+            anim.SetBool("isWalking", false);
+            anim.SetBool("isRunning", false);
+            anim.SetBool("isHolding", false);
+            anim.CrossFade("Standing Idle", 0.2f);
+        }
+        moveVelocity = Vector3.zero;
+
+        // --- 이동 및 시선 고정 (기존 로직) ---
+        float elapsed = 0;
+        float duration = 1.0f; 
+        Vector3 startPos = transform.position;
+        Quaternion startRot = transform.rotation;
+        float startCamX = currentCameraRotationX;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime * sink.transitionSpeed;
+            float t = elapsed / duration;
+
+            transform.position = Vector3.Lerp(startPos, sink.standPoint.position, t);
+
+            Vector3 targetDir = (sink.lookAtPoint.position - playerCamera.transform.position).normalized;
+            Quaternion targetFullRot = Quaternion.LookRotation(targetDir);
+            float targetY = targetFullRot.eulerAngles.y;
+            transform.rotation = Quaternion.Slerp(startRot, Quaternion.Euler(0, targetY, 0), t);
+
+            float targetX = targetFullRot.eulerAngles.x;
+            if (targetX > 180) targetX -= 360; 
+            currentCameraRotationX = Mathf.Lerp(startCamX, targetX, t);
+            playerCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0, 0);
+
+            yield return null;
+        }
+
+        // 소리 재생
+        sink.PlayWaterSound(); 
+
+        // 대기 (손 씻는 중)
+        yield return new WaitForSeconds(sink.routineDuration);
+
+        // 소리 끄기
+        sink.StopWaterSound();
+        
+        // [추가됨 2] 원래 들고 있었다면 다시 꺼내기
+        if (wasHoldingLighter && lighterObject != null)
+        {
+            lighterObject.SetActive(true); // 모델 다시 표시
+            isHolding = true; // 상태 복구
+            if (anim != null) anim.SetBool("isHolding", true); // 팔 다시 들기
+        }
+
+        isHandlingRoutine = false;
+        Debug.Log("손 씻기 완료");
     }
 
     // ----- 상호작용 -----
@@ -390,17 +471,10 @@ public class PlayerController : MonoBehaviour
                 {
                     if (Input.GetKeyDown(KeyCode.E))
                     {
-                        Debug.Log("3. E키 입력 확인!"); // 이게 뜨면 키 입력도 OK
-
-                        SinkController sink = hitInfo.collider.GetComponentInParent<SinkController>();
-                        if (sink != null)
+                        SinkInteractable sinkData = hitInfo.collider.GetComponent<SinkInteractable>();
+                        if (sinkData != null)
                         {
-                            Debug.Log("4. SinkController 찾음 -> 물 틀기 시도");
-                            sink.ToggleWater();
-                        }
-                        else
-                        {
-                            Debug.LogError("오류: SinkController 스크립트를 찾을 수 없습니다! 세면대에 스크립트를 붙였나요?");
+                            StartSinkRoutine(sinkData);
                         }
                     }
                 }
