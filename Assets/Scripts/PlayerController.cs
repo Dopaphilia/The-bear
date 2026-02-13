@@ -58,6 +58,10 @@ public class PlayerController : MonoBehaviour
     [Header("Routine State")]
     private bool isHandlingRoutine = false;
 
+    [Header("Sleep UI")]
+    public CanvasGroup sleepCanvasGroup; // 위에서 만든 Canvas의 CanvasGroup 연결
+    public TMPro.TextMeshProUGUI dayTextUI; // DayText 연결
+
     void Start()
     {
         controller = GetComponent<CharacterController>(); 
@@ -277,6 +281,68 @@ public class PlayerController : MonoBehaviour
         Debug.Log("손 씻기 완료");
     }
 
+    public void StartSleepRoutine(BedInteractable bed)
+{
+    StartCoroutine(SleepRoutineCoroutine(bed));
+}
+
+IEnumerator SleepRoutineCoroutine(BedInteractable bed)
+{
+    isHandlingRoutine = true;
+    moveVelocity = Vector3.zero;
+
+    // 1. 침대 위치로 이동 및 시선 고정 (SinkRoutine 로직 재활용)
+    float elapsed = 0;
+    float moveDuration = 1.0f;
+    Vector3 startPos = transform.position;
+    Quaternion startRot = transform.rotation;
+
+    while (elapsed < moveDuration)
+    {
+        elapsed += Time.deltaTime * 2.0f; // 이동 속도
+        float t = elapsed / moveDuration;
+        transform.position = Vector3.Lerp(startPos, bed.sleepPoint.position, t);
+        
+        // 시선 처리 (누운 자세 연출)
+        Vector3 targetDir = (bed.lookAtPoint.position - playerCamera.transform.position).normalized;
+        transform.rotation = Quaternion.Slerp(startRot, Quaternion.LookRotation(new Vector3(targetDir.x, 0, targetDir.z)), t);
+        yield return null;
+    }
+
+    // 2. 화면 어두워지기 (Fade Out)
+    if (GameManager.Instance != null)
+    {
+        dayTextUI.text = GameManager.Instance.GetNextDayText(); 
+    }
+    else
+    {
+        // 만약 GameManager가 없다면 임시로 표시 (에러 방지용)
+        dayTextUI.text = "DAY ?";
+    }
+    elapsed = 0;
+    while (elapsed < bed.fadeDuration)
+    {
+        elapsed += Time.deltaTime;
+        sleepCanvasGroup.alpha = Mathf.Clamp01(elapsed / bed.fadeDuration);
+        yield return null;
+    }
+
+    // 3. 검은 화면 유지 (여기서 게임 시간이나 날짜 데이터를 넘기면 좋습니다)
+    yield return new WaitForSeconds(bed.blackScreenHoldTime);
+
+    // 4. 화면 다시 밝아지기 (Fade In)
+    elapsed = 0;
+    while (elapsed < bed.fadeDuration)
+    {
+        elapsed += Time.deltaTime;
+        sleepCanvasGroup.alpha = Mathf.Clamp01(1 - (elapsed / bed.fadeDuration));
+        yield return null;
+    }
+
+    isHandlingRoutine = false;
+    Debug.Log("잠자기 완료");
+}
+
     // ----- 상호작용 -----
     [SerializeField] public float interactionDistance = 3f;
     public void interaction()
@@ -475,6 +541,21 @@ public class PlayerController : MonoBehaviour
                         if (sinkData != null)
                         {
                             StartSinkRoutine(sinkData);
+                        }
+                    }
+                }
+            }
+            else if (hitInfo.collider.CompareTag("Bed"))
+            {
+                hitDistance = hitInfo.distance;
+                if (hitDistance <= 2.0f) 
+                {
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        BedInteractable bedData = hitInfo.collider.GetComponent<BedInteractable>();
+                        if (bedData != null)
+                        {
+                            StartSleepRoutine(bedData);
                         }
                     }
                 }

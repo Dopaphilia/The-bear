@@ -20,7 +20,7 @@ public class SinkInteractable : MonoBehaviour
     {
         if (waterSound != null) 
         {
-            waterSound.loop = true; // 루프 켜기
+            waterSound.loop = false; // 루프 켜기
             waterSound.Play();
         }
     }
