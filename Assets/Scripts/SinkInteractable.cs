@@ -6,7 +6,8 @@ public class SinkInteractable : MonoBehaviour
 {
     [Header("Position Setup")]
     public Transform standPoint;  // 설 위치
-    public Transform lookAtPoint; // 바라볼 위치 (오브젝트)
+    public Transform lookAtPoint_Mirror; // 거울을 바라보는 위치
+    public Transform lookAtPoint_Sink;   // 싱크대를 바라보는 위치
     
     [Header("Settings")]
     public float routineDuration = 4.0f; // 손 씻는 시간

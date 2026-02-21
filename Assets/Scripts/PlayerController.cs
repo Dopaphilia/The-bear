@@ -210,138 +210,193 @@ public class PlayerController : MonoBehaviour
     IEnumerator SinkRoutineCoroutine(SinkInteractable sink)
     {
         isHandlingRoutine = true;
+        moveVelocity = Vector3.zero;
 
-        // [추가됨 1] 라이터를 들고 있었다면 잠시 숨기기 (주머니에 넣는 연출)
-        bool wasHoldingLighter = isHolding; // 루틴 시작 전 상태 기억
-        
+        // [라이터 처리] 루틴 시작 전 상태 기억 및 숨기기
+        bool wasHoldingLighter = isHolding; 
         if (wasHoldingLighter && lighterObject != null)
         {
-            lighterObject.SetActive(false); // 모델 숨기기
-            isHolding = false; // 상태 변수 끄기
-            if (anim != null) anim.SetBool("isHolding", false); // 팔 드는 애니메이션 해제
-            
-            // LateUpdate에 있는 팔 IK 로직도 lighterObject.activeSelf 체크 덕분에 자동으로 멈춤
+            lighterObject.SetActive(false);
+            isHolding = false;
+            if (anim != null) anim.SetBool("isHolding", false);
         }
 
-        // 걷기 애니메이션 초기화
+        // 애니메이션 및 속도 초기화
         if (anim != null)
         {
             anim.SetBool("isWalking", false);
             anim.SetBool("isRunning", false);
-            anim.SetBool("isHolding", false);
-            anim.CrossFade("Standing Idle", 0.2f);
+            anim.CrossFade("Standing Idle", 0.1f); // 전환을 더 빠르게
         }
         moveVelocity = Vector3.zero;
 
-        // --- 이동 및 시선 고정 (기존 로직) ---
+        // --- 1단계: 거울 정면 위치로 빠르게 보정 ---
         float elapsed = 0;
-        float duration = 1.0f; 
-        Vector3 startPos = transform.position;
-        Quaternion startRot = transform.rotation;
-        float startCamX = currentCameraRotationX;
+        float setupDuration = 0.7f;
+        Vector3 initialPos = transform.position;
+        Quaternion initialRot = transform.rotation;
+        float initialCamX = currentCameraRotationX;
 
-        while (elapsed < duration)
+        while (elapsed < setupDuration)
         {
             elapsed += Time.deltaTime * sink.transitionSpeed;
-            float t = elapsed / duration;
+            float t = Mathf.Clamp01(elapsed / setupDuration);
+            float smoothT = Mathf.SmoothStep(0f, 1f, t); // 부드러운 보간 적용
 
-            transform.position = Vector3.Lerp(startPos, sink.standPoint.position, t);
+            transform.position = Vector3.Lerp(initialPos, sink.standPoint.position, t);
 
-            Vector3 targetDir = (sink.lookAtPoint.position - playerCamera.transform.position).normalized;
-            Quaternion targetFullRot = Quaternion.LookRotation(targetDir);
-            float targetY = targetFullRot.eulerAngles.y;
-            transform.rotation = Quaternion.Slerp(startRot, Quaternion.Euler(0, targetY, 0), t);
+            // 시선 처리: 먼저 거울(Mirror) 정면 응시
+            Vector3 mirrorDir = (sink.lookAtPoint_Mirror.position - playerCamera.transform.position).normalized;
+            Quaternion mirrorFullRot = Quaternion.LookRotation(mirrorDir);
+            transform.rotation = Quaternion.Slerp(initialRot, Quaternion.Euler(0, mirrorFullRot.eulerAngles.y, 0), smoothT);
 
-            float targetX = targetFullRot.eulerAngles.x;
-            if (targetX > 180) targetX -= 360; 
-            currentCameraRotationX = Mathf.Lerp(startCamX, targetX, t);
+            float mX = mirrorFullRot.eulerAngles.x;
+            if (mX > 180) mX -= 360;
+            currentCameraRotationX = Mathf.Lerp(initialCamX, mX, t);
             playerCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0, 0);
 
             yield return null;
         }
 
-        // 소리 재생
+        // --- 2단계: 거울에서 싱크대로 고개 숙이며 빠르게 암전 ---
         sink.PlayWaterSound(); 
-
-        // 대기 (손 씻는 중)
-        yield return new WaitForSeconds(sink.routineDuration);
-
-        // 소리 끄기
-        sink.StopWaterSound();
         
-        // [추가됨 2] 원래 들고 있었다면 다시 꺼내기
+        elapsed = 0;
+        float fadeOutDuration = 0.6f;
+        float startSinkCamX = currentCameraRotationX;
+
+        while (elapsed < fadeOutDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / fadeOutDuration);
+            float smoothT = Mathf.SmoothStep(0f, 1f, t); // 부드러운 보간 적용
+
+            // 시선 처리: 싱크대(Sink) 안쪽으로 고개 숙임
+            Vector3 sinkDir = (sink.lookAtPoint_Sink.position - playerCamera.transform.position).normalized;
+            float sX = Quaternion.LookRotation(sinkDir).eulerAngles.x;
+            if (sX > 180) sX -= 360;
+            
+            currentCameraRotationX = Mathf.Lerp(startSinkCamX, sX, smoothT);
+            playerCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0, 0);
+
+            if (sleepCanvasGroup != null)
+            {
+                sleepCanvasGroup.alpha = t; 
+            }
+
+            yield return null;
+        }
+
+        // --- 3단계: 짧은 암전 대기 및 시선 복구 ---
+        // Inspector에서 routineDuration을 1.0~1.5 정도로 낮게 설정해 보세요.
+        yield return new WaitForSeconds(sink.routineDuration); 
+        float beforeFadeInCamX = currentCameraRotationX;
+        
+        elapsed = 0;
+        float fadeInDuration = 0.8f; // 고개를 드는 연출을 위해 시간을 조금 늘림 (0.2f -> 0.8f)
+        
+        while (elapsed < fadeInDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / fadeInDuration);
+            float smoothT = Mathf.SmoothStep(0f, 1f, t); // 부드러운 연출
+
+            // 시선 처리: 암전 때 숙였던 고개(beforeFadeInCamX)에서 거울 높이(fMX)로 들기
+            if (sink.lookAtPoint_Mirror != null)
+            {
+                Vector3 targetMirrorDir = (sink.lookAtPoint_Mirror.position - playerCamera.transform.position).normalized;
+                float targetMX = Quaternion.LookRotation(targetMirrorDir).eulerAngles.x;
+                if (targetMX > 180) targetMX -= 360;
+
+                // t값에 따라 고개가 서서히 들어짐
+                currentCameraRotationX = Mathf.Lerp(beforeFadeInCamX, targetMX, smoothT);
+                playerCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0, 0);
+            }
+
+            // 화면 밝아지기
+            if (sleepCanvasGroup != null)
+                sleepCanvasGroup.alpha = 1 - t; 
+
+            yield return null;
+        }
+
+        // [복구] 라이터 다시 꺼내기
         if (wasHoldingLighter && lighterObject != null)
         {
-            lighterObject.SetActive(true); // 모델 다시 표시
-            isHolding = true; // 상태 복구
-            if (anim != null) anim.SetBool("isHolding", true); // 팔 다시 들기
+            lighterObject.SetActive(true);
+            isHolding = true;
+            if (anim != null) anim.SetBool("isHolding", true);
         }
 
         isHandlingRoutine = false;
-        Debug.Log("손 씻기 완료");
     }
 
     public void StartSleepRoutine(BedInteractable bed)
-{
-    StartCoroutine(SleepRoutineCoroutine(bed));
-}
-
-IEnumerator SleepRoutineCoroutine(BedInteractable bed)
-{
-    isHandlingRoutine = true;
-    moveVelocity = Vector3.zero;
-
-    // 1. 침대 위치로 이동 및 시선 고정 (SinkRoutine 로직 재활용)
-    float elapsed = 0;
-    float moveDuration = 1.0f;
-    Vector3 startPos = transform.position;
-    Quaternion startRot = transform.rotation;
-
-    while (elapsed < moveDuration)
     {
-        elapsed += Time.deltaTime * 2.0f; // 이동 속도
-        float t = elapsed / moveDuration;
-        transform.position = Vector3.Lerp(startPos, bed.sleepPoint.position, t);
+        StartCoroutine(SleepRoutineCoroutine(bed));
+    }
+
+    IEnumerator SleepRoutineCoroutine(BedInteractable bed)
+    {
+        isHandlingRoutine = true;
+        moveVelocity = Vector3.zero;
+
+        // 물리 엔진 간섭 차단
+        if (controller != null) controller.enabled = false;
+
+        // 1. 침대로 이동 및 눕기 (밝은 상태에서 진행)
+        float elapsed = 0;
+        float moveDuration = 1.0f;
+        Vector3 startPos = transform.position;
+        Quaternion startRot = transform.rotation;
+
+        // BedInteractable에서 설정한 각도대로 목표 회전값 계산
+        Quaternion targetRot = Quaternion.Euler(bed.sleepRotation);
+
+        while (elapsed < moveDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / moveDuration;
+            float smoothT = Mathf.SmoothStep(0f, 1f, t); 
+
+            transform.position = Vector3.Lerp(startPos, bed.sleepPoint.position, smoothT);
+            transform.rotation = Quaternion.Slerp(startRot, targetRot, smoothT);
+            yield return null;
+        }
+
+        // 2. 화면 어두워지기 (Fade Out)
+        if (GameManager.Instance != null) dayTextUI.text = GameManager.Instance.GetNextDayText(); 
         
-        // 시선 처리 (누운 자세 연출)
-        Vector3 targetDir = (bed.lookAtPoint.position - playerCamera.transform.position).normalized;
-        transform.rotation = Quaternion.Slerp(startRot, Quaternion.LookRotation(new Vector3(targetDir.x, 0, targetDir.z)), t);
-        yield return null;
-    }
+        elapsed = 0;
+        while (elapsed < bed.fadeDuration)
+        {
+            elapsed += Time.deltaTime;
+            sleepCanvasGroup.alpha = Mathf.Clamp01(elapsed / bed.fadeDuration);
+            yield return null;
+        }
 
-    // 2. 화면 어두워지기 (Fade Out)
-    if (GameManager.Instance != null)
-    {
-        dayTextUI.text = GameManager.Instance.GetNextDayText(); 
-    }
-    else
-    {
-        // 만약 GameManager가 없다면 임시로 표시 (에러 방지용)
-        dayTextUI.text = "DAY ?";
-    }
-    elapsed = 0;
-    while (elapsed < bed.fadeDuration)
-    {
-        elapsed += Time.deltaTime;
-        sleepCanvasGroup.alpha = Mathf.Clamp01(elapsed / bed.fadeDuration);
-        yield return null;
-    }
+        // 3. 암전 상태 유지 (이때 위치는 이미 침대 위)
+        yield return new WaitForSeconds(bed.blackScreenHoldTime);
 
-    // 3. 검은 화면 유지 (여기서 게임 시간이나 날짜 데이터를 넘기면 좋습니다)
-    yield return new WaitForSeconds(bed.blackScreenHoldTime);
+        // 4. 캐릭터 상태 원상복귀 (화면이 밝아지기 전 처리) ---
+        transform.rotation = Quaternion.Euler(bed.wakeUpRotation); 
+        transform.position = bed.wakeUpPoint.position; 
+        currentCameraRotationX = 10.8f;
+        playerCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0, 0);
 
-    // 4. 화면 다시 밝아지기 (Fade In)
-    elapsed = 0;
-    while (elapsed < bed.fadeDuration)
-    {
-        elapsed += Time.deltaTime;
-        sleepCanvasGroup.alpha = Mathf.Clamp01(1 - (elapsed / bed.fadeDuration));
-        yield return null;
+        // 5. 화면 다시 밝아지기 (Fade In)
+        elapsed = 0;
+        while (elapsed < bed.fadeDuration)
+        {
+            elapsed += Time.deltaTime;
+            sleepCanvasGroup.alpha = Mathf.Clamp01(1 - (elapsed / bed.fadeDuration));
+            yield return null;
+        }
+
+        // 모든 루틴이 끝난 후 다시 물리 활성화
+        if (controller != null) controller.enabled = true;
+        isHandlingRoutine = false;
     }
-
-    isHandlingRoutine = false;
-    Debug.Log("잠자기 완료");
-}
 
     // ----- 상호작용 -----
     [SerializeField] public float interactionDistance = 3f;
