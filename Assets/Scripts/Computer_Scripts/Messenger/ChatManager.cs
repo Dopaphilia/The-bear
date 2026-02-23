@@ -1,53 +1,135 @@
 using UnityEngine;
-using System.Collections; // IEnumerator와 Coroutine 사용을 위해 필수!
-using TMPro;              // TextMeshPro 기능을 사용하기 위해 필수!
+using TMPro;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+[System.Serializable]
+public struct ChatLine
+{
+    public bool isMe;
+    [TextArea(3, 5)]
+    public string message;
+}
 
 public class ChatManager : MonoBehaviour
 {
-    public GameObject listPanel;        // Messenger_List_Panel 연결용
-    public GameObject chatPanel;        // Chat_Panel 연결용
-    public TMP_InputField messageInput; // 입력창 연결
+    [Header("UI 연결")]
+    public GameObject myBubblePrefab;
+    public GameObject npcBubblePrefab;
+    public Transform content;
+    public ScrollRect chatScroll;
+    public InputField chatInputField;
 
-    // 친구 클릭 시 실행 (리스트 끔, 채팅창 켬)
-    public void OpenChat()
+    [Header("초기 설정")]
+    // ★ 처음 시작할 때 미리 와 있을 메시지 개수를 적어주세요.
+    public int initialMessageCount = 3;
+
+    [Header("대본 설정")]
+    public List<ChatLine> chatScript;
+    private int currentStep = 0;
+    private bool isProcessing = false;
+
+    void OnEnable()
     {
-        listPanel.SetActive(false);
-        chatPanel.SetActive(true);
-    }
+        isProcessing = false;
+        StopAllCoroutines();
 
-    // 뒤로가기 버튼(<) 클릭 시 실행 (채팅창 끔, 리스트 켬)
-    public void BackToList()
-    {
-        chatPanel.SetActive(false);
-        listPanel.SetActive(true);
-    }
-
-    // 전송 버튼에 이 함수를 연결하세요
-    public void OnClickSend()
-    {
-        // 입력창에 적힌 텍스트 가져오기
-        string userText = messageInput.text;
-
-        // 텍스트가 비어있지 않을 때만 실행
-        if (!string.IsNullOrEmpty(userText))
+        // 1. 저장된 기록이 있는지 확인합니다.
+        if (!PlayerPrefs.HasKey("ChatStep"))
         {
-            // 1. 내 메시지를 콘솔에 출력 (추후 말풍선 생성 코드가 들어갈 자리)
-            Debug.Log("나: " + userText);
+            // ★ 2. 기록이 아예 없는 완전 처음이라면, 설정한 개수만큼 진행도를 올려버립니다.
+            currentStep = Mathf.Min(initialMessageCount, chatScript.Count);
+            SaveProgress();
+        }
+        else
+        {
+            // 3. 기존에 하던 대화가 있다면 그 진행도를 가져옵니다.
+            currentStep = PlayerPrefs.GetInt("ChatStep", 0);
+        }
 
-            // 2. 입력창 비우기
-            messageInput.text = "";
+        RefreshChatUI();
+    }
 
-            // 3. 1초 뒤 답장 오게 하기 (코루틴 시작)
-            StartCoroutine(ReplyAfterDelay());
+    // (기존 RefreshChatUI, OnSendButtonClick, ChatFlowRoutine 등은 동일합니다)
+
+    void RefreshChatUI()
+    {
+        foreach (Transform child in content) Destroy(child.gameObject);
+
+        for (int i = 0; i < currentStep; i++)
+        {
+            CreateBubble(chatScript[i].isMe ? myBubblePrefab : npcBubblePrefab, chatScript[i].message);
+        }
+
+        if (currentStep < chatScript.Count && !chatScript[currentStep].isMe)
+        {
+            StartCoroutine(ChatFlowRoutine(true));
+        }
+        else
+        {
+            UpdateInputField();
         }
     }
 
-    // 1초 대기 후 답장을 로그로 찍는 기능
-    IEnumerator ReplyAfterDelay()
+    public void OnSendButtonClick()
     {
-        yield return new WaitForSeconds(1f); // 1초 대기
+        if (!isProcessing && currentStep < chatScript.Count)
+        {
+            if (chatScript[currentStep].isMe)
+            {
+                StartCoroutine(ChatFlowRoutine(false));
+            }
+        }
+    }
 
-        // 4. 상대방 답장 로직 (추후 상대방 말풍선 생성 코드가 들어갈 자리)
-        Debug.Log("상대방: 그래 반가워!");
+    IEnumerator ChatFlowRoutine(bool isResume)
+    {
+        isProcessing = true;
+        if (!isResume)
+        {
+            CreateBubble(myBubblePrefab, chatScript[currentStep].message);
+            currentStep++;
+            SaveProgress();
+            chatInputField.text = "";
+        }
+
+        while (currentStep < chatScript.Count && !chatScript[currentStep].isMe)
+        {
+            yield return new WaitForSeconds(1.0f);
+            CreateBubble(npcBubblePrefab, chatScript[currentStep].message);
+            currentStep++;
+            SaveProgress();
+        }
+
+        UpdateInputField();
+        isProcessing = false;
+    }
+
+    void SaveProgress() { PlayerPrefs.SetInt("ChatStep", currentStep); PlayerPrefs.Save(); }
+
+    void UpdateInputField()
+    {
+        if (chatScript != null && currentStep < chatScript.Count)
+            chatInputField.text = chatScript[currentStep].isMe ? chatScript[currentStep].message : "";
+        else if (currentStep >= chatScript.Count)
+            chatInputField.text = "대화 종료";
+    }
+
+    private void CreateBubble(GameObject prefab, string message)
+    {
+        GameObject newMessage = Instantiate(prefab, content);
+        newMessage.GetComponentInChildren<TMP_Text>().text = message;
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(content.GetComponent<RectTransform>());
+        chatScroll.verticalNormalizedPosition = 0f;
+    }
+
+    [ContextMenu("Reset Progress")]
+    public void ResetProgress()
+    {
+        PlayerPrefs.DeleteKey("ChatStep");
+        // 리셋 후 OnEnable이 다시 실행되면서 initialMessageCount만큼 다시 채워집니다.
+        OnEnable();
     }
 }
