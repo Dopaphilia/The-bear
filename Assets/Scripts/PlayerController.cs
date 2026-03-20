@@ -615,6 +615,26 @@ public class PlayerController : MonoBehaviour
                     }
                 }
             }
+            else if (hitInfo.collider.CompareTag("Elevator"))
+            {
+                hitDistance = hitInfo.distance;
+                if (hitDistance <= 2.0f)
+                {
+                    Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
+                    Debug.Log("E : 엘리베이터 조작 (" + hitInfo.collider.name + ")");
+
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        // 여기를 ElevatorManager -> ElevatorController 로 변경!
+                        ElevatorController elevator = hitInfo.collider.GetComponentInParent<ElevatorController>();
+                        
+                        if (elevator != null)
+                        {
+                            elevator.Interact(hitInfo.collider.gameObject, this.gameObject);
+                        }
+                    }
+                }
+            }
         }
     }
     // 문과 상호작용 시 뒤로 밀려나는 코루틴
