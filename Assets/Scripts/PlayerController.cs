@@ -15,7 +15,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float runSpeed = 8f;
     private bool isRunning = false;
     private Vector3 moveVelocity; // X, Y, Z 모든 움직임을 담을 변수
-    private float currentCameraRotationX = 0f; // 카메라 회전 변수 (상하)
+    public float currentCameraRotationX = 0f; // 카메라 회전 변수 (상하)
     
     [Header("Jumping")]
     [SerializeField] private float jumpForce = 6.5f; // 초기 속도
@@ -24,7 +24,7 @@ public class PlayerController : MonoBehaviour
     [Header("Camera")]
     [SerializeField] private float lookSensitivity = 200f; // 회전 감도
     [SerializeField] private float cameraRotationLimitX = 65f; // 카메라 고정 각도 (상하)
-    [SerializeField] private Camera playerCamera;
+    [SerializeField] public Camera playerCamera;
 
     [Header("Pushing")]
     [SerializeField] private float pushForce = 2.0f;
@@ -56,12 +56,12 @@ public class PlayerController : MonoBehaviour
     public LayerMask interactionLayer;
 
     [Header("Routine State")]
-    private bool isHandlingRoutine = false;
+    public bool isHandlingRoutine = false;
 
-    [Header("Sleep UI")]
-    public CanvasGroup sleepCanvasGroup; // 위에서 만든 Canvas의 CanvasGroup 연결
-    public TMPro.TextMeshProUGUI dayTextUI; // DayText 연결
-
+    [Header("UI")]
+    public UnityEngine.UI.Image blackFadeImage;
+    public TMPro.TextMeshProUGUI dayTextUI;
+    public TMPro.TextMeshProUGUI interactionTextUI;
     void Start()
     {
         controller = GetComponent<CharacterController>(); 
@@ -72,9 +72,14 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        if (isPeeping || isHandlingRoutine)
+        if (isPeeping)
         {
             CheckExitPeeping();
+            return;
+        }
+
+        if (isHandlingRoutine)
+        {
             return;
         }
 
@@ -157,7 +162,7 @@ public class PlayerController : MonoBehaviour
     {
         float moveDirX = Input.GetAxisRaw("Horizontal");
         float moveDirZ = Input.GetAxisRaw("Vertical");
-        bool isWalking = (moveDirX != 0 || moveDirZ != 0);
+        bool isWalking = (moveDirX != 0 || moveDirZ != 0); 
         isRunning = Input.GetKey(KeyCode.LeftShift);
 
         // 현재 바라보는 방향을 기준으로 계산
@@ -210,6 +215,7 @@ public class PlayerController : MonoBehaviour
     IEnumerator SinkRoutineCoroutine(SinkInteractable sink)
     {
         isHandlingRoutine = true;
+        interactionTextUI.gameObject.SetActive(false);
         moveVelocity = Vector3.zero;
 
         // [라이터 처리] 루틴 시작 전 상태 기억 및 숨기기
@@ -279,9 +285,11 @@ public class PlayerController : MonoBehaviour
             currentCameraRotationX = Mathf.Lerp(startSinkCamX, sX, smoothT);
             playerCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0, 0);
 
-            if (sleepCanvasGroup != null)
+            if (blackFadeImage != null)
             {
-                sleepCanvasGroup.alpha = t; 
+                Color c = blackFadeImage.color;
+                c.a = t;
+                blackFadeImage.color = c;
             }
 
             yield return null;
@@ -314,9 +322,12 @@ public class PlayerController : MonoBehaviour
             }
 
             // 화면 밝아지기
-            if (sleepCanvasGroup != null)
-                sleepCanvasGroup.alpha = 1 - t; 
-
+            if (blackFadeImage != null)
+            {
+                Color c = blackFadeImage.color;
+                c.a = 1 - t;
+                blackFadeImage.color = c;
+            }
             yield return null;
         }
 
@@ -327,7 +338,6 @@ public class PlayerController : MonoBehaviour
             isHolding = true;
             if (anim != null) anim.SetBool("isHolding", true);
         }
-
         isHandlingRoutine = false;
     }
 
@@ -339,6 +349,7 @@ public class PlayerController : MonoBehaviour
     IEnumerator SleepRoutineCoroutine(BedInteractable bed)
     {
         isHandlingRoutine = true;
+        interactionTextUI.gameObject.SetActive(false);
         moveVelocity = Vector3.zero;
 
         // 물리 엔진 간섭 차단
@@ -364,19 +375,36 @@ public class PlayerController : MonoBehaviour
             yield return null;
         }
 
-        // 2. 화면 어두워지기 (Fade Out)
-        if (GameManager.Instance != null) dayTextUI.text = GameManager.Instance.GetNextDayText(); 
-        
+        if (GameManager.Instance != null && dayTextUI != null) 
+        {
+            dayTextUI.gameObject.SetActive(true); 
+            dayTextUI.text = GameManager.Instance.GetNextDayText(); 
+            
+            Color startColor = dayTextUI.color;
+            dayTextUI.color = startColor;
+        }
         elapsed = 0;
         while (elapsed < bed.fadeDuration)
         {
             elapsed += Time.deltaTime;
-            sleepCanvasGroup.alpha = Mathf.Clamp01(elapsed / bed.fadeDuration);
+            if (blackFadeImage != null)
+            {
+                Color c = blackFadeImage.color;
+                c.a = Mathf.Clamp01(elapsed / bed.fadeDuration);
+                blackFadeImage.color = c;
+            }
+            if (dayTextUI != null)
+            {
+                Color tc = dayTextUI.color;
+                tc.a = Mathf.Clamp01(elapsed / bed.fadeDuration);
+                dayTextUI.color = tc;
+            }
             yield return null;
         }
 
         // 3. 암전 상태 유지 (이때 위치는 이미 침대 위)
         yield return new WaitForSeconds(bed.blackScreenHoldTime);
+
 
         // 4. 캐릭터 상태 원상복귀 (화면이 밝아지기 전 처리) ---
         transform.rotation = Quaternion.Euler(bed.wakeUpRotation); 
@@ -389,7 +417,18 @@ public class PlayerController : MonoBehaviour
         while (elapsed < bed.fadeDuration)
         {
             elapsed += Time.deltaTime;
-            sleepCanvasGroup.alpha = Mathf.Clamp01(1 - (elapsed / bed.fadeDuration));
+            if (blackFadeImage != null)
+            {
+                Color c = blackFadeImage.color;
+                c.a = Mathf.Clamp01(1 - (elapsed / bed.fadeDuration));
+                blackFadeImage.color = c;
+            }
+            if (dayTextUI != null)
+            {
+                Color tc = dayTextUI.color;
+                tc.a = Mathf.Clamp01(1 - (elapsed / bed.fadeDuration));
+                dayTextUI.color = tc;
+            }
             yield return null;
         }
 
@@ -412,6 +451,9 @@ public class PlayerController : MonoBehaviour
         float ItemGetDistance = 1.2f;
         float hitDistance;
 
+        bool canInteract = false;
+        string interactText = "";
+
         // raycast시각 확인용 (미충돌 빨강, 충돌 녹색)   
         Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.red);
 
@@ -422,11 +464,20 @@ public class PlayerController : MonoBehaviour
                 hitDistance = hitInfo.distance;
                 if (hitDistance <= safeInteractionDistance)
                 {
+                    Door doorScript = hitInfo.collider.GetComponentInParent<Door>();
                     Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
-                    Debug.Log(hitInfo.collider.name + "과(와) 상호작용 가능");
+                    if (doorScript.isOpen && doorScript.isMoving == false)
+                    {
+                        interactText = "E : 문 닫기";
+                    }
+                    else if (doorScript.isOpen == false && doorScript.isMoving == false)
+                    {
+                        interactText = "E : 문 열기";
+                    }
+                    canInteract = true;
+
                     if (Input.GetKeyDown(KeyCode.E))
                     {
-                        Door doorScript = hitInfo.collider.GetComponentInParent<Door>();
                         if (doorScript.doorType == Door.DoorType.Rotating)
                         {
                             if (doorScript != null)
@@ -472,7 +523,9 @@ public class PlayerController : MonoBehaviour
                     Item itemScript = hitInfo.collider.GetComponent<Item>();
                     if (itemScript.itemName == "Lighter")
                     {
-                        Debug.Log(itemScript.itemName + " 획득 가능");
+                        interactText = "E : 라이터 획득";
+                        canInteract = true;
+
                         if (Input.GetKeyDown(KeyCode.E))
                         {
                             if (itemScript != null && hitDistance <= ItemGetDistance && hasLighter == false)
@@ -498,25 +551,27 @@ public class PlayerController : MonoBehaviour
                         if (candle != null && hitDistance <= ItemGetDistance) {
                             if (hasLighter && !candle.isFire)
                             {
-                                Debug.Log("E : 향 피우기");
+                                interactText = "E : 향 피우기";
+                                canInteract = true;
+
                                 if (Input.GetKeyDown(KeyCode.E))
                                 {
                                     if (itemScript != null && hitDistance <= ItemGetDistance)
                                     {
                                         candle.IgniteCandle();
-                                        Debug.Log("향을 피웠습니다.");
                                     }
                                 }
                             }
                             else if (candle.isFire)
                             {
-                                Debug.Log("E : 향 끄기");
+                                interactText = "E : 향 끄기";
+                                canInteract = true;
+
                                 if (Input.GetKeyDown(KeyCode.E))
                                 {
                                     if (itemScript != null && hitDistance <= ItemGetDistance)
                                     {
                                         candle.ExtinguishCandle();
-                                        Debug.Log("향을 껐습니다.");
                                     }
                                 }
                             }
@@ -528,7 +583,8 @@ public class PlayerController : MonoBehaviour
             else if (hitInfo.collider.CompareTag("ItemSpot"))
             {
                 if (hasLighter) {
-                    Debug.Log("E : 라이터 놓기");
+                    interactText = "E : 라이터 놓기";
+                    canInteract = true;
 
                     if (Input.GetKeyDown(KeyCode.E))
                     {
@@ -547,12 +603,12 @@ public class PlayerController : MonoBehaviour
             else if (hitInfo.collider.CompareTag("Peephole"))
             {
                 hitDistance = hitInfo.distance;
-                // 렌즈는 문보다 가까이서 봐야 하므로 거리를 짧게 잡습니다.
                 if (hitDistance <= 1.0f) 
                 {
                     Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
-                    // UI 표시 (예: "E : 살펴보기") 등을 띄우는 코드 추가 가능
-                    Debug.Log("E : 살펴보기");
+                    interactText = "E : 들여다보기";
+                    canInteract = true;
+
                     if (Input.GetKeyDown(KeyCode.E))
                     {
                         DoorPeephole peepholeScript = hitInfo.collider.GetComponent<DoorPeephole>();
@@ -566,20 +622,39 @@ public class PlayerController : MonoBehaviour
             else if (hitInfo.collider.CompareTag("Fridge"))
             {
                 hitDistance = hitInfo.distance;
-                // 냉장고 상호작용 가능 거리 설정 (기존 ItemGetDistance 등 활용 가능)
                 if (hitDistance <= 2.0f) 
                 {
+                    FridgeManager fridge = hitInfo.collider.GetComponentInParent<FridgeManager>();
                     Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
-                    Debug.Log("E : 냉장고 열기/닫기");
+                    if (hitInfo.collider.gameObject == fridge.leftDoor.gameObject) 
+                    {
+                        if (fridge.isLeftOpen == false && fridge.isLeftMoving == false)
+                        {
+                            interactText = "E : 냉장고 열기";
+                        }
+                        else if (fridge.isLeftOpen == true && fridge.isLeftMoving == false)
+                        {
+                            interactText = "E : 냉장고 닫기";
+                        }
+                    }
+                    if (hitInfo.collider.gameObject == fridge.rightDoor.gameObject)
+                    {
+                        if (fridge.isRightOpen == false && fridge.isRightMoving == false)
+                        {
+                            interactText = "E : 냉장고 열기";
+                        }
+                        else if (fridge.isRightOpen == true && fridge.isRightMoving == false)
+                        {
+                            interactText = "E : 냉장고 닫기";
+                        }
+                    }
+
+                    canInteract = true;
 
                     if (Input.GetKeyDown(KeyCode.E))
-                    {
-                        // 부모 객체에 있는 FridgeManager를 찾음
-                        FridgeManager fridge = hitInfo.collider.GetComponentInParent<FridgeManager>();
-                        
+                    {   
                         if (fridge != null)
                         {
-                            // 현재 Ray가 맞은 문(hitInfo.collider.gameObject)을 넘겨줌
                             fridge.Interact(hitInfo.collider.gameObject);
                         }
                     }
@@ -590,6 +665,9 @@ public class PlayerController : MonoBehaviour
                 hitDistance = hitInfo.distance;
                 if (hitDistance <= 2.0f) 
                 {
+                    interactText = "E : 싱크대 사용";
+                    canInteract = true;
+
                     if (Input.GetKeyDown(KeyCode.E))
                     {
                         SinkInteractable sinkData = hitInfo.collider.GetComponent<SinkInteractable>();
@@ -605,6 +683,9 @@ public class PlayerController : MonoBehaviour
                 hitDistance = hitInfo.distance;
                 if (hitDistance <= 2.0f) 
                 {
+                    interactText = "E : 잠자기";
+                    canInteract = true;
+
                     if (Input.GetKeyDown(KeyCode.E))
                     {
                         BedInteractable bedData = hitInfo.collider.GetComponent<BedInteractable>();
@@ -621,11 +702,11 @@ public class PlayerController : MonoBehaviour
                 if (hitDistance <= 2.0f)
                 {
                     Debug.DrawRay(rayOrigin, rayDirection * interactionDistance, Color.green);
-                    Debug.Log("E : 엘리베이터 조작 (" + hitInfo.collider.name + ")");
+                    interactText = "E : 엘리베이터 사용";
+                    canInteract = true;
 
                     if (Input.GetKeyDown(KeyCode.E))
                     {
-                        // 여기를 ElevatorManager -> ElevatorController 로 변경!
                         ElevatorController elevator = hitInfo.collider.GetComponentInParent<ElevatorController>();
                         
                         if (elevator != null)
@@ -633,6 +714,31 @@ public class PlayerController : MonoBehaviour
                             elevator.Interact(hitInfo.collider.gameObject, this.gameObject);
                         }
                     }
+                }
+            }
+        }
+        if (interactionTextUI != null)
+        {
+            if (isHandlingRoutine) 
+            {
+                if (interactionTextUI.gameObject.activeSelf) 
+                    interactionTextUI.gameObject.SetActive(false);
+                return; 
+            }
+
+            if (canInteract)
+            {
+                interactionTextUI.text = interactText; 
+                if (!interactionTextUI.gameObject.activeSelf) 
+                {
+                    interactionTextUI.gameObject.SetActive(true);
+                }
+            }
+            else
+            {
+                if (interactionTextUI.gameObject.activeSelf) 
+                {
+                    interactionTextUI.gameObject.SetActive(false);
                 }
             }
         }

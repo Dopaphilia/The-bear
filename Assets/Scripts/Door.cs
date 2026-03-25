@@ -10,8 +10,8 @@ public class Door : MonoBehaviour
         Rotating, Sliding
     }
     public DoorType doorType = DoorType.Rotating;
-    private bool isOpen = false;
-    private bool isMoving = false;
+    public bool isOpen = false;
+    public bool isMoving = false;
     public float doorSpeed = 3.0f;
 
     [Header("Rotating Door")]

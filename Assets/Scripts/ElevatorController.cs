@@ -26,9 +26,11 @@ public class ElevatorController : MonoBehaviour
     [SerializeField] Vector3 doorOpenOffset = new Vector3(0, 0, 1.5f); 
     [SerializeField] float doorMoveDuration = 1.0f; 
     [SerializeField] float moveSpeed = 3f;
-    
-    [Tooltip("문이 열린 후 자동으로 닫히기까지 기다리는 시간 (초)")]
-    [SerializeField] float autoCloseDelay = 3.0f; // ★ 추가된 타이머 변수
+    [SerializeField] float autoCloseDelay = 3.0f;
+
+    [Header("Player Control")]
+    [SerializeField] Transform playerStandPoint;
+    [SerializeField] Vector3 playerStandRotation = new Vector3(5f,0f,0f);
 
     private bool isDoorOpen = false;
     private bool isMoving = false;
@@ -38,7 +40,7 @@ public class ElevatorController : MonoBehaviour
     private Vector3 startLeftClosedPos, startRightClosedPos;
     private Vector3 targetLeftClosedPos, targetRightClosedPos;
 
-    private Coroutine autoCloseCoroutine; // ★ 타이머 제어용 코루틴
+    private Coroutine autoCloseCoroutine;
 
     void Start()
     {
@@ -62,7 +64,6 @@ public class ElevatorController : MonoBehaviour
         }
         else if (hitObject.name == "Inner_Button")
         {
-            // ★ 수정됨: 문이 닫혀있어도 이동 로직이 실행되도록 조건문 제거
             StartCoroutine(MoveElevatorRoutine(player));
         }
     }
@@ -72,12 +73,10 @@ public class ElevatorController : MonoBehaviour
         isDoorOpen = true;
         yield return StartCoroutine(MoveDoors(true));
 
-        // ★ 기존 타이머가 돌고 있다면 끄고, 새로 3초 타이머 시작
         if (autoCloseCoroutine != null) StopCoroutine(autoCloseCoroutine);
         autoCloseCoroutine = StartCoroutine(AutoCloseTimer());
     }
 
-    // ★ 추가된 자동 닫힘 타이머 로직
     IEnumerator AutoCloseTimer()
     {
         yield return new WaitForSeconds(autoCloseDelay);
@@ -139,38 +138,93 @@ public class ElevatorController : MonoBehaviour
             yield return StartCoroutine(CloseDoorRoutine());
         }
 
-        // ★ 추가 1: 이동 전 플레이어의 물리 연산(CharacterController) 끄기
         CharacterController cc = player.GetComponent<CharacterController>();
-        if (cc != null) cc.enabled = false;
+        PlayerController pc = player.GetComponent<PlayerController>();
+
+        if (cc != null)
+        {
+            cc.enabled = false;
+        }
+        if (pc != null) 
+        {
+            pc.isHandlingRoutine = true;
+        }
+
+        if (playerStandPoint != null)
+        {
+            float elapsed = 0f;
+            float duration = 0.8f;
+
+            // 시작 지점 저장
+            Vector3 startPos = player.transform.position;
+            Quaternion startRot = player.transform.rotation;
+            float startCamX = pc.currentCameraRotationX;
+
+            // 목표 지점 설정
+            Vector3 targetPos = playerStandPoint.position;
+            Quaternion targetRot = Quaternion.Euler(0, playerStandRotation.y, 0);
+            float targetCamX = playerStandRotation.x;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                float smoothT = Mathf.SmoothStep(0f, 1f, t); // S자 곡선 보간
+
+                // 위치 이동
+                player.transform.position = Vector3.Lerp(startPos, targetPos, smoothT);
+
+                // 몸통 회전 (좌우)
+                player.transform.rotation = Quaternion.Slerp(startRot, targetRot, smoothT);
+
+                // 카메라 회전 (상하)
+                if (pc != null && pc.playerCamera != null)
+                {
+                    pc.currentCameraRotationX = Mathf.Lerp(startCamX, targetCamX, smoothT);
+                    pc.playerCamera.transform.localEulerAngles = new Vector3(pc.currentCameraRotationX, 0, 0);
+                }
+
+                yield return null;
+            }
+            player.transform.position = targetPos;
+            player.transform.rotation = targetRot;
+        }
+        
 
         player.transform.SetParent(elevatorCar);
 
-        Vector3 startPos = elevatorCar.position;
-        Vector3 targetPos = isAtStartFloor ? targetFloorPoint.position : startFloorPoint.position;
+        Vector3 elevatorStartPos = elevatorCar.position;
+        Vector3 elevatorTargetPos = isAtStartFloor ? targetFloorPoint.position : startFloorPoint.position;
         
-        float distance = Vector3.Distance(startPos, targetPos);
-        float duration = distance / moveSpeed; 
+        float distance = Vector3.Distance(elevatorStartPos, elevatorTargetPos);
+        float elevatorDuration = distance / moveSpeed; 
         float time = 0;
 
         while (time < 1f)
         {
-            time += Time.deltaTime / duration;
+            time += Time.deltaTime / elevatorDuration;
             float smoothT = Mathf.SmoothStep(0f, 1f, time); 
             
-            elevatorCar.position = Vector3.Lerp(startPos, targetPos, smoothT);
+            elevatorCar.position = Vector3.Lerp(elevatorStartPos, elevatorTargetPos, smoothT);
             yield return null;
         }
         
-        elevatorCar.position = targetPos; 
+        elevatorCar.position = elevatorTargetPos; 
+
         player.transform.SetParent(null);
 
-        // ★ 추가 2: 도착 후 물리 연산 다시 켜기
-        if (cc != null) cc.enabled = true;
+        if (cc != null)
+        {
+            cc.enabled = true;
+        }
+
+        if (pc != null) 
+        {
+            pc.isHandlingRoutine = false;
+        }
 
         isAtStartFloor = !isAtStartFloor;
-
         yield return StartCoroutine(OpenDoorRoutine());
-
         isMoving = false;
     }
 }
