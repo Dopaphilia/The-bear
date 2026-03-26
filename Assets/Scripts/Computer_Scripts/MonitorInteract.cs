@@ -13,7 +13,7 @@ public class MonitorInteract : MonoBehaviour
         GameObject mainCamObj = GameObject.Find("Main_Camera");
         if (mainCamObj != null) mainCamera = mainCamObj.GetComponent<Camera>();
 
-        GameObject uiCamObj = GameObject.Find("Camera");
+        GameObject uiCamObj = GameObject.Find("UI_Camera");
         if (uiCamObj != null) uiCamera = uiCamObj.GetComponent<Camera>();
     }
 
