@@ -545,6 +545,18 @@ public class PlayerController : MonoBehaviour
                             }
                         }
                     }
+                    else if (itemScript.itemName == "Medicine")
+                    {
+                        interactText = "E : 영양제 먹기";
+                        canInteract = true;
+
+                        if (Input.GetKeyDown(KeyCode.E))
+                        {
+                            Debug.Log("영양제 복용");
+                            if (GameManager.Instance != null) GameManager.Instance.hasTakenSupplements = true;
+                            // hitInfo.collider.gameObject.SetActive(false); // 더 이상 비활성화하지 않음
+                        }
+                    }
                     if (itemScript.itemName == "Candle")
                     {
                         CandleController candle = hitInfo.collider.GetComponentInParent<CandleController>();
@@ -559,6 +571,8 @@ public class PlayerController : MonoBehaviour
                                     if (itemScript != null && hitDistance <= ItemGetDistance)
                                     {
                                         candle.IgniteCandle();
+                                        // 규칙 체크: 향 피우기 완료
+                                        if (GameManager.Instance != null) GameManager.Instance.hasLitCandle = true;
                                     }
                                 }
                             }
@@ -674,6 +688,8 @@ public class PlayerController : MonoBehaviour
                         if (sinkData != null)
                         {
                             StartSinkRoutine(sinkData);
+                            // 규칙 체크: 손 씻기 완료
+                            if (GameManager.Instance != null) GameManager.Instance.hasWashedHands = true;
                         }
                     }
                 }
@@ -683,10 +699,12 @@ public class PlayerController : MonoBehaviour
                 hitDistance = hitInfo.distance;
                 if (hitDistance <= 2.0f) 
                 {
-                    interactText = "E : 잠자기";
+                    // 규칙 완료 여부에 따라 텍스트 변경
+                    bool canSleep = GameManager.Instance != null && GameManager.Instance.IsAllRulesCleared();
+                    interactText = canSleep ? "E : 잠자기" : "아직 할 일이 남았다...";
                     canInteract = true;
 
-                    if (Input.GetKeyDown(KeyCode.E))
+                    if (Input.GetKeyDown(KeyCode.E) && canSleep)
                     {
                         BedInteractable bedData = hitInfo.collider.GetComponent<BedInteractable>();
                         if (bedData != null)
