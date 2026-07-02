@@ -32,8 +32,10 @@ public class PlayerController : MonoBehaviour
     
     [Header("Item")]
     [SerializeField] private GameObject lighterObject;
+    [SerializeField] private GameObject MedicineObject;
     private bool isHolding = false;
     private bool hasLighter = false;
+    private bool hasMedicine = false;
 
     [Header("Peephole")]
     private bool isPeeping = false;
@@ -534,7 +536,11 @@ public class PlayerController : MonoBehaviour
                                 hitInfo.collider.gameObject.SetActive(false);
                                 if (itemScript.linkedSpot != null)
                                 {
-                                    itemScript.linkedSpot.SetActive(true);
+                                    BoxCollider spotCollider = itemScript.linkedSpot.GetComponent<BoxCollider>();
+                                    if (spotCollider != null)
+                                    {
+                                        spotCollider.enabled = true; 
+                                    }
                                 }
                                 if (lighterObject != null)
                                 {
@@ -553,8 +559,19 @@ public class PlayerController : MonoBehaviour
                         if (Input.GetKeyDown(KeyCode.E))
                         {
                             Debug.Log("영양제 복용");
+                            hitInfo.collider.gameObject.SetActive(false);
                             if (GameManager.Instance != null) GameManager.Instance.hasTakenSupplements = true;
-                            // hitInfo.collider.gameObject.SetActive(false); // 더 이상 비활성화하지 않음
+                            hitInfo.collider.gameObject.SetActive(false);
+                            if (itemScript.linkedSpot != null)
+                            {
+                                itemScript.linkedSpot.SetActive(true);
+                            }
+                            if (MedicineObject != null)
+                            {
+                                MedicineObject.SetActive(true);
+                                isHolding = true;
+                                hasMedicine = true;
+                            }
                         }
                     }
                     if (itemScript.itemName == "Candle")
@@ -609,7 +626,28 @@ public class PlayerController : MonoBehaviour
                             isHolding = false;
                             hasLighter = false;
                             spotScript.originalItem.SetActive(true);
-                            hitInfo.collider.gameObject.SetActive(false);
+                            if (hitInfo.collider != null)
+                            {
+                                hitInfo.collider.enabled = false;
+                            }
+                        }
+                    }
+                }
+                if (hasMedicine)
+                {
+                    interactText = "E : 영양제 놓기";
+                    canInteract = true;
+
+                    if (Input.GetKeyDown(KeyCode.E))
+                    {
+                        ItemSpot spotScript = hitInfo.collider.GetComponent<ItemSpot>();
+                        if (spotScript != null)
+                        {
+                            MedicineObject.SetActive(false);
+                            isHolding = false;
+                            hasMedicine = false;
+                            spotScript.originalItem.SetActive(true);
+                            //hitInfo.collider.gameObject.SetActive(false);
                         }
                     }
                 }
