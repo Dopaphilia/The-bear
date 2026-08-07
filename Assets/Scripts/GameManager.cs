@@ -9,6 +9,10 @@ public class GameManager : MonoBehaviour
     [Header("Game Settings")]
     public int currentDay = 1;
 
+    [Header("Dialogue Settings")]
+    [TextArea(2, 5)]
+    public string[] introDialogueLines = new string[] { "으으 똥마려워.." };
+
     [Header("Rule States")]
     public bool hasLitCandle = false;    // 규칙 1: 향초 피우기
     public bool hasTakenSupplements = false; // 규칙 2: 영양제 먹기
@@ -92,9 +96,9 @@ public class GameManager : MonoBehaviour
         player.isHandlingRoutine = false; // 이동 해제
 
         // [추가] 시작 대화 출력
-        if (DialogueManager.Instance != null)
+        if (DialogueManager.Instance != null && introDialogueLines != null && introDialogueLines.Length > 0)
         {
-            DialogueManager.Instance.StartDialogue(new string[] { "으으 똥마려워.." });
+            DialogueManager.Instance.StartDialogue(introDialogueLines);
         }
     }
 

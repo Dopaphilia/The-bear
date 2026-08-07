@@ -2,20 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class DoorPeephole : MonoBehaviour
+// 기존 DoorPeephole을 사용하는 곳과의 호환성을 유지하면서 PeepholeInteractable의 모든 인스펙터 기능을 상속받습니다.
+public class DoorPeephole : PeepholeInteractable
 {
-[Header("Settings")]
-    public GameObject peepholeCamera; // 문에 달려있는 렌즈 카메라 오브젝트
-
-    // 렌즈 보기 활성화
-    public void EnableView()
-    {
-        peepholeCamera.SetActive(true);
-    }
-
-    // 렌즈 보기 비활성화
-    public void DisableView()
-    {
-        peepholeCamera.SetActive(false);
-    }
 }

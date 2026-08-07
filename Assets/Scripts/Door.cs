@@ -14,6 +14,10 @@ public class Door : MonoBehaviour
     public bool isMoving = false;
     public float doorSpeed = 3.0f;
 
+    [Header("Door Identification")]
+    [Tooltip("현관문인 경우 체크해 주세요 (졸업앨범 이벤트 연출용)")]
+    public bool isFrontDoor = false;
+
     [Header("Rotating Door")]
     public float openAngle = -90.0f;
     public float closeAngle = 0f;

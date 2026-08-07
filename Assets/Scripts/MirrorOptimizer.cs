@@ -30,11 +30,12 @@ public class MirrorOptimizer : MonoBehaviour
             return;
         }
 
-        // 거리 계산 (성능을 위해 제곱 거리 비교 사용 가능하지만, 간단하게 Distance 사용)
-        float distance = Vector3.Distance(transform.position, playerTransform.position);
+        // 거리 계산 (성능을 위해 루트 연산이 없는 sqrMagnitude 사용)
+        float sqrDistance = (transform.position - playerTransform.position).sqrMagnitude;
+        float sqrRenderDistance = renderDistance * renderDistance;
 
         // 거리가 설정값보다 가까우면 카메라 켜고, 멀면 끄기
-        if (distance <= renderDistance)
+        if (sqrDistance <= sqrRenderDistance)
         {
             if (!mirrorCamera.enabled) mirrorCamera.enabled = true;
         }
