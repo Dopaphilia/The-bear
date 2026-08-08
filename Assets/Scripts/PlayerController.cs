@@ -2033,7 +2033,7 @@ public class PlayerController : MonoBehaviour
                 hitDistance = hitInfo.distance;
                 if (hitDistance <= 2.5f)
                 {
-                    interactText = "E : 책 읽기";
+                    interactText = "E : 책 보기";
                     canInteract = true;
 
                     if (Input.GetKeyDown(KeyCode.E))
